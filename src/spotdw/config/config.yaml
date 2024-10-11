@@ -1,0 +1,6 @@
+base_url: https://openspot-dinamis.data-terra.org/api/geo/YEAR_SOURCE
+api_url: https://openspot-dinamis.data-terra.org/api/lien_tif
+cookie: eyJ2YWx1ZXMiOls1NDIzXX0.ZwlFpQ.m0BvNR2D6ujHt3NnVCDy7gjsLqY # If expired, to obtain the cookie, fill in the required form by hand and collect it from storage once this has been done
+years: [2021]
+
+save_dir: "/Users/fajwel/Downloads/spotdw"
