@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=download_spot    # create a short name for your job
+#SBATCH --job-name=pansharpen    # create a short name for your job
 #SBATCH --hint=multithread       # we get physical cores not logical
 #SBATCH --time=20:00:00          # total run time limit (HH:MM:SS)
 #SBATCH --output=log/%x_%j.out   # output file name
@@ -20,6 +20,6 @@ set -x
 module load python/3.11.5
 conda activate canopy
 
-srun python Code/spotdw/src/spotdw/download.py 
+srun python Code/spotdw/src/spotdw/pansharpen.py 
 
 echo "### Finished $SLURM_JOB_NAME"

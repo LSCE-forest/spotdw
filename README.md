@@ -4,8 +4,14 @@ https://openspot-dinamis.data-terra.org/
 
 ## Usage
 
-Update the config in src/spotdw/config/config.yaml and run
+Update the configs in `src/spotdw/config/` and run
 
 ```bash
-python src/spotdw/run.py
+python src/spotdw/download.py
 ```
+
+```bash
+python src/spotdw/pansharpen.py
+```
+
+or adapt the slurm scripts in the `scripts`directory.
