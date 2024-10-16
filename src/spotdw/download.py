@@ -12,7 +12,7 @@ def main(cfg: DictConfig) -> None:
     # save the config next to the data
     OmegaConf.save(cfg, os.path.join(cfg.save_dir, "download_config.yaml"))
 
-    gdf = list_available_data(cfg.base_url, cfg.cookie, years=cfg.years)
+    gdf = list_available_data(cfg.base_url, cfg.cookie, year=cfg.year)
     os.makedirs("data", exist_ok=True)
 
     list_of_failures = []

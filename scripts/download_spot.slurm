@@ -9,17 +9,20 @@
 #SBATCH --ntasks-per-node=1   # This needs to match Trainer(devices=...)
 #SBATCH --cpus-per-task=2       # cpu-cores per task (>1 if multi-threaded tasks)
 #SBATCH --partition=prepost          # Name of the partition
+#SBATCH --array=0-6%5
 
-
-# salloc --nodes=1 --ntasks-per-node=1 --cpus-per-task=2  --hint=nomultithread --partition=prepost  --time=1:00:00 
-
-# TODO if working, make a job array with all years
+# To instantiate an interactive session: salloc --nodes=1 --ntasks-per-node=1 --cpus-per-task=2  --hint=nomultithread --partition=prepost  --time=1:00:00 
 
 set -x
 
-module load python/3.11.5
-conda activate canopy
+module load gdal
+module load pytorch-gpu/py3/2.2.0
 
-srun python Code/spotdw/src/spotdw/download.py 
+# Set years
+year_list=("2014" "2015" "2016" "2017" "2018" "2019" "2020" "2021" "2022")
+
+year=${year_list[$SLURM_ARRAY_TASK_ID]}
+
+srun python Code/spotdw/src/spotdw/download.py ++year="$year"
 
 echo "### Finished $SLURM_JOB_NAME"

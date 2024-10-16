@@ -1,30 +1,12 @@
 import os
-import subprocess
 from datetime import datetime
-
 import hydra
 import numpy as np
 import pandas as pd
 import rasterio
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
-
-
-def gdal_pansharpen(ms_path, pan_path, out_path):
-    # simple pansharpening with Brovey transform
-    # Ensure the output directory exists
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-
-    # Define the command to run
-    command = [
-        "gdal_pansharpen.py",
-        pan_path,
-        ms_path,
-        out_path,
-    ]
-
-    # Run the command
-    subprocess.run(command, check=True, capture_output=True)
+from osgeo_utils.gdal_pansharpen import gdal_pansharpen
 
 
 @hydra.main(version_base=None, config_path="config", config_name="pansharpen_config")
@@ -82,56 +64,17 @@ def main(cfg: DictConfig) -> None:
         out_path = os.path.join(save_dir, image_name)
         if not os.path.isfile(out_path):
             print(f"Pansharpening {image_ms_path} and {image_pan_path}")
-            gdal_pansharpen(image_ms_path, image_pan_path, out_path)
-
-    # NB: could use orfeo toolbox instead, though processing time is much longer, images first need to be aligned,
-    # and installation is complex
-
-    image_names = [
-        x
-        for x in os.listdir(save_dir)
-        if x.endswith(".tif") and not x.startswith(".") and not x.startswith("compressed_")
-    ]
-
-    if cfg.scale_to_eight_bits:
-        if cfg.max_value is not None:
-            max_value = np.array(cfg.max_value)
-            min_value = np.zeros_like(max_value)
-        else:
-            if not os.path.isfile(os.path.join(save_dir, "quantiles.npy")):
-                # Retrieve quantiles by opening all images
-                # apply scaling with 0.02 and 0.98 quantile
-                # XXX min scaling not working here as there are always 0 on the edges
-                min_quantile_list = []
-                max_quantile_list = []
-                for image in tqdm(image_names, desc="Computing quantiles"):
-                    with rasterio.open(os.path.join(save_dir, image), "r") as src:
-                        data = src.read()
-                        min_quantile_list.append(np.percentile(data, 2, axis=(1, 2)))
-                        max_quantile_list.append(np.percentile(data, 98, axis=(1, 2)))
-
-                min_quantile_list = np.vstack(min_quantile_list)
-                max_quantile_list = np.vstack(max_quantile_list)
-
-                min_value = np.min(min_quantile_list, axis=0)
-                max_value = np.max(max_quantile_list, axis=0)
-                data = None
-
-                np.save(
-                    os.path.join(save_dir, "quantiles.npy"),
-                    [min_quantile_list, max_quantile_list],
-                )
-            else:
-                quantile_list = np.load(os.path.join(save_dir, "quantiles.npy"))
-                min_value = np.min(quantile_list[0], axis=0)
-                max_value = np.max(quantile_list[1], axis=0)
-
-    for image in tqdm(image_names, desc="Scaling and compressing images"):
-        with rasterio.open(os.path.join(save_dir, image), "r") as src:
+            gdal_pansharpen(["", "-spat_adjust", "intersection", image_pan_path, image_ms_path, out_path])
+            # gdal_pansharpen(image_ms_path, image_pan_path, out_path)
+        with rasterio.open(os.path.join(save_dir, image_name), "r") as src:
             data = src.read()
             profile = src.profile.copy()
 
         if cfg.scale_to_eight_bits:
+            print(f"Clipping max values to {cfg.max_value}")
+            max_value = np.array(cfg.max_value)
+            min_value = np.zeros_like(max_value)
+
             for i in range(data.shape[0]):
                 data[i, :, :] = np.clip(data[i, :, :], min_value[i], max_value[i])
                 data[i, :, :] = (data[i, :, :] - min_value[i]) / (max_value[i] - min_value[i]) * 255
@@ -139,8 +82,8 @@ def main(cfg: DictConfig) -> None:
             profile.update(dtype=rasterio.uint8, BIGTIFF="YES")
 
         if cfg.compress:
-            # Update the profile to include LZW compression and tiling
-            profile.update(compress="lzw", BIGTIFF="YES")
+            # Update the profile to include compression and tiling
+            profile.update(compress="zstd", BIGTIFF="YES")
         if cfg.tiled:
             profile.update(
                 tiled=True,
@@ -150,11 +93,12 @@ def main(cfg: DictConfig) -> None:
             )
 
         # Write to a new TIFF with the updated profile
-        with rasterio.open(os.path.join(save_dir, "compressed_" + image), "w", **profile) as dst:
+        print("Compressing")
+        with rasterio.open(os.path.join(save_dir, "compressed_" + image_name), "w", **profile) as dst:
             dst.write(data)
 
         if cfg.remove_uncompressed:
-            os.remove(os.path.join(save_dir, image))
+            os.remove(os.path.join(save_dir, image_name))
 
 
 if __name__ == "__main__":

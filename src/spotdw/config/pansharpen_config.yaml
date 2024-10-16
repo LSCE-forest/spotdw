@@ -1,7 +1,7 @@
 spot_dir: /lustre/fsn1/projects/rech/ego/commun/fajwel/spot_raw # Must contains two folders "spot_<year>_ms" and "spot_<year>_pan" containing multispectral and panchromatic images respectlively (adapt the code if names do not match the format of those downloaded from https://openspot-dinamis.data-terra.org/)
 year: 2023 # year to which apply pansharpening
 save_dir: /lustre/fsn1/projects/rech/ego/commun/fajwel/spot_raw/pansharpened
-version: null # Specify a version name, if null the version name is the current date in format YYYYMMDDHHmm
+version: 20241015 # Specify a version name, if null the version name is the current date in format YYYYMMDDHHmm
 compress: true # lzw compression
 tiled: true # 256x256
 scale_to_eight_bits: true # clip with max_value and scale to 0-255
