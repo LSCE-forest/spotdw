@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import rasterio
 from omegaconf import DictConfig, OmegaConf
-from tqdm import tqdm
 from osgeo_utils.gdal_pansharpen import gdal_pansharpen
+import warnings
 
 
 @hydra.main(version_base=None, config_path="config", config_name="pansharpen_config")
@@ -54,51 +54,64 @@ def main(cfg: DictConfig) -> None:
 
     spot_df["match"] = spot_df.apply(check_images_match, axis=1)
 
-    assert spot_df.shape[0] == spot_df["match"].sum()
+    if spot_df.shape[0] != spot_df["match"].sum():
+        warnings.warn(f"There are {spot_df.shape[0] - spot_df['match'].sum()} images that do not match.")
+
+    spot_df["short_name_is_duplicated"] = (
+        spot_df["pan"].apply(lambda x: x.split("/")[-1].split("_")[2][0:14]).duplicated()
+    )
 
     # Pansharpen images
-    for image_ms_path, image_pan_path in tqdm(
-        zip(spot_df["ms"], spot_df["pan"]), desc="Pansharpening images"
-    ):
+    for index, row in spot_df.iterrows():
+        image_ms_path = row["ms"]
+        image_pan_path = row["pan"]
+
         image_name = "pansharpened_" + image_ms_path.split("/")[-1].split("_")[2][0:14] + ".tif"
+
+        # DEPRECATION WARNING: for future runs, keep only the long name
+        # check if short name is duplicated, if yes, keep longer name:
+        if row["short_name_is_duplicated"]:
+            image_name = "pansharpened_" + image_ms_path.split("/")[-1].split("_")[2] + ".tif"
+
         out_path = os.path.join(save_dir, image_name)
-        if not os.path.isfile(out_path):
+        final_out_path = os.path.join(save_dir, "compressed_" + image_name)
+        if not os.path.isfile(final_out_path):
             print(f"Pansharpening {image_ms_path} and {image_pan_path}")
             gdal_pansharpen(["", "-spat_adjust", "intersection", image_pan_path, image_ms_path, out_path])
             # gdal_pansharpen(image_ms_path, image_pan_path, out_path)
-        with rasterio.open(os.path.join(save_dir, image_name), "r") as src:
-            data = src.read()
-            profile = src.profile.copy()
+            with rasterio.open(os.path.join(save_dir, image_name), "r") as src:
+                data = src.read()
+                profile = src.profile.copy()
 
-        if cfg.scale_to_eight_bits:
-            print(f"Clipping max values to {cfg.max_value}")
-            max_value = np.array(cfg.max_value)
-            min_value = np.zeros_like(max_value)
+            if cfg.scale_to_eight_bits:
+                print(f"Clipping max values to {cfg.max_value}")
+                max_value = np.array(cfg.max_value)
+                min_value = np.zeros_like(max_value)
 
-            for i in range(data.shape[0]):
-                data[i, :, :] = np.clip(data[i, :, :], min_value[i], max_value[i])
-                data[i, :, :] = (data[i, :, :] - min_value[i]) / (max_value[i] - min_value[i]) * 255
-            data = data.astype(np.uint8)
-            profile.update(dtype=rasterio.uint8, BIGTIFF="YES")
+                for i in range(data.shape[0]):
+                    data[i, :, :] = np.clip(data[i, :, :], min_value[i], max_value[i])
+                    data[i, :, :] = (data[i, :, :] - min_value[i]) / (max_value[i] - min_value[i]) * 255
+                data = data.astype(np.uint8)
+                profile.update(dtype=rasterio.uint8, BIGTIFF="YES")
 
-        if cfg.compress:
-            # Update the profile to include compression and tiling
-            profile.update(compress="zstd", BIGTIFF="YES")
-        if cfg.tiled:
-            profile.update(
-                tiled=True,
-                blockxsize=256,
-                blockysize=256,
-                BIGTIFF="YES",  # Tile size: width  # Tile size: height
-            )
+            if cfg.compress:
+                # Update the profile to include compression and tiling
+                profile.update(compress="zstd", BIGTIFF="YES")
+            if cfg.tiled:
+                profile.update(
+                    tiled=True,
+                    blockxsize=256,
+                    blockysize=256,
+                    BIGTIFF="YES",  # Tile size: width  # Tile size: height
+                )
 
-        # Write to a new TIFF with the updated profile
-        print("Compressing")
-        with rasterio.open(os.path.join(save_dir, "compressed_" + image_name), "w", **profile) as dst:
-            dst.write(data)
+            # Write to a new TIFF with the updated profile
+            print("Compressing")
+            with rasterio.open(os.path.join(save_dir, "compressed_" + image_name), "w", **profile) as dst:
+                dst.write(data)
 
-        if cfg.remove_uncompressed:
-            os.remove(os.path.join(save_dir, image_name))
+            if cfg.remove_uncompressed:
+                os.remove(os.path.join(save_dir, image_name))
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ spot_dir: /lustre/fsn1/projects/rech/ego/commun/fajwel/spot_raw # Must contains 
 year: 2023 # year to which apply pansharpening
 save_dir: /lustre/fsn1/projects/rech/ego/commun/fajwel/spot_raw/pansharpened
 version: 20241015 # Specify a version name, if null the version name is the current date in format YYYYMMDDHHmm
-compress: true # lzw compression
+compress: true # zstd compression
 tiled: true # 256x256
 scale_to_eight_bits: true # clip with max_value and scale to 0-255
 remove_uncompressed: true # keep only compressed pansharpened images
